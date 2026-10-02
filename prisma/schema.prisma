@@ -1,0 +1,189 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AccountType {
+  CHECKING
+  SAVINGS
+}
+
+enum AccountStatus {
+  ACTIVE
+  FROZEN
+  CLOSED
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+  TRANSFER
+}
+
+enum TransactionStatus {
+  COMPLETED
+  PENDING
+  FAILED
+}
+
+enum TransferStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum CardType {
+  DEBIT
+  VIRTUAL
+}
+
+enum CardStatus {
+  ACTIVE
+  FROZEN
+  CANCELLED
+}
+
+model Profile {
+  id           String      @id @db.Uuid
+  email        String      @unique
+  phone        String?
+  displayName  String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  accounts     Account[]
+  transactions Transaction[]
+  transfers    Transfer[]
+  cards        Card[]
+  plaidItems   PlaidItem[]
+
+  @@index([createdAt])
+}
+
+model Account {
+  id                 String         @id @default(uuid()) @db.Uuid
+  userId             String         @db.Uuid
+  name               String
+  type               AccountType
+  status             AccountStatus  @default(ACTIVE)
+  numberLast4        String         @db.VarChar(4)
+  currency           String         @default("USD") @db.VarChar(3)
+  availableBalance   Decimal        @default(0) @db.Decimal(19, 2)
+  currentBalance     Decimal        @default(0) @db.Decimal(19, 2)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  user               Profile        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions       Transaction[]
+  sentTransfers      Transfer[]     @relation("TransferSender")
+  receivedTransfers  Transfer[]     @relation("TransferRecipient")
+  cards              Card[]
+
+  @@index([userId, status])
+  @@index([userId, type])
+  @@unique([userId, name])
+}
+
+model Transaction {
+  id          String            @id @default(uuid()) @db.Uuid
+  userId      String            @db.Uuid
+  accountId   String            @db.Uuid
+  transferId  String?           @db.Uuid
+  description String
+  category    String?
+  type        TransactionType
+  status      TransactionStatus @default(COMPLETED)
+  amount      Decimal           @db.Decimal(19, 2)
+  currency    String            @default("USD") @db.VarChar(3)
+  occurredAt  DateTime          @default(now())
+  createdAt   DateTime          @default(now())
+  user        Profile           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account     Account           @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  transfer    Transfer?         @relation(fields: [transferId], references: [id], onDelete: SetNull)
+
+  @@index([userId, occurredAt(sort: Desc)])
+  @@index([accountId, occurredAt(sort: Desc)])
+  @@index([userId, status, occurredAt(sort: Desc)])
+  @@index([transferId])
+}
+
+model Transfer {
+  id             String         @id @default(uuid()) @db.Uuid
+  userId         String         @db.Uuid
+  fromAccountId  String         @db.Uuid
+  toAccountId    String?        @db.Uuid
+  recipientName  String?
+  recipientEmail String?
+  description    String?
+  status         TransferStatus @default(PENDING)
+  fundsReserved  Boolean        @default(true)
+  amount         Decimal        @db.Decimal(19, 2)
+  currency       String         @default("USD") @db.VarChar(3)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  user           Profile        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fromAccount    Account        @relation("TransferSender", fields: [fromAccountId], references: [id], onDelete: Restrict)
+  toAccount      Account?       @relation("TransferRecipient", fields: [toAccountId], references: [id], onDelete: SetNull)
+  transactions   Transaction[]
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([fromAccountId, createdAt(sort: Desc)])
+  @@index([toAccountId])
+}
+
+model Card {
+  id                 String     @id @default(uuid()) @db.Uuid
+  userId             String     @db.Uuid
+  accountId          String?    @db.Uuid
+  name               String
+  type               CardType
+  status             CardStatus @default(ACTIVE)
+  last4              String     @db.VarChar(4)
+  expirationMonth    Int
+  expirationYear     Int
+  spendingLimit      Decimal?   @db.Decimal(19, 2)
+  spentThisPeriod    Decimal    @default(0) @db.Decimal(19, 2)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  user               Profile    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account            Account?   @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status])
+}
+
+model PlaidItem {
+  id                    String           @id @default(uuid()) @db.Uuid
+  userId                String           @db.Uuid
+  itemId                String           @unique
+  accessTokenCiphertext String           @db.Text
+  institutionId         String?
+  institutionName       String?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  user                  Profile          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accounts              ExternalAccount[]
+
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+model ExternalAccount {
+  id                String    @id @default(uuid()) @db.Uuid
+  plaidItemId       String    @db.Uuid
+  plaidAccountId    String    @unique
+  name              String
+  officialName      String?
+  mask              String?   @db.VarChar(4)
+  type              String
+  subtype           String?
+  currentBalance    Decimal?  @db.Decimal(19, 2)
+  availableBalance  Decimal?  @db.Decimal(19, 2)
+  currency          String    @default("USD") @db.VarChar(3)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  plaidItem         PlaidItem @relation(fields: [plaidItemId], references: [id], onDelete: Cascade)
+
+  @@index([plaidItemId])
+}

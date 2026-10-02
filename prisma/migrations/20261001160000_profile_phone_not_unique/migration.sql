@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS "Profile_phone_key";

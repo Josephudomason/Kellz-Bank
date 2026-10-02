@@ -1,0 +1,2 @@
+ALTER TABLE "Transfer"
+ADD COLUMN "fundsReserved" BOOLEAN NOT NULL DEFAULT true;

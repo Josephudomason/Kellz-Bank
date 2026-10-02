@@ -1,0 +1,1 @@
+ALTER TABLE "RegistrationChallenge" ADD COLUMN "registrationHash" TEXT;
